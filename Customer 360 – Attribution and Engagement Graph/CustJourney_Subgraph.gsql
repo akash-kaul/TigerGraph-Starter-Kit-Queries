@@ -1,0 +1,33 @@
+CREATE QUERY CustJourney_Subgraph(vertex<Contact> customer, vertex<Opportunity> opportunity) FOR GRAPH MyGraph { 
+/*
+  Sample input:
+	  Contact: Sam-Eisenberg
+	  opportunity: 0063600000gEoe0AAC
+
+*/
+	SetAccum<edge> @@displaySet;
+  SetAccum<vertex> @@vertexSet;
+
+	cust = { customer };
+		
+	acct = select t from cust:c -(belongs_to:e)-> Account:t
+	       accum @@displaySet += e, @@vertexSet += t;
+	
+  opp = select t from cust -(Has_Role:e)-> Opportunity:t 
+	      accum @@displaySet += e, @@vertexSet += t;
+	
+	campaign_members =
+	        select t
+	        from cust -(is_connected_to:e)-> CampaignMember:t
+	        accum @@vertexSet += cust, @@vertexSet += t, @@displaySet += e;
+	
+	campaigns = select t from campaign_members -(is_part_of:e)-> Campaign:t
+	            accum @@vertexSet += t, @@displaySet += e;
+	
+	Verts = @@vertexSet;
+	
+	print Verts;
+	//print@@vertexSet;
+
+	print @@displaySet;
+}
