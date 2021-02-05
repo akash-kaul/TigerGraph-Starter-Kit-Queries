@@ -1,0 +1,13 @@
+CREATE QUERY allConnection(VERTEX<Patient> p) FOR GRAPH MyGraph { 
+  /******************************************
+	* Grabing all connections of a specified Patient
+	******************************************/
+  ListAccum<EDGE> @@edgeList;
+	seed = {p};
+	
+	S1 = SELECT s
+	       FROM seed:s -(:e)->:t
+	       ACCUM @@edgeList += e;
+	
+  PRINT  @@edgeList; 
+}

@@ -1,0 +1,27 @@
+CREATE QUERY edgeCrawl()FOR GRAPH MyGraph { 
+  /**************************************
+	* S1 = Grabbing all Patients that a Patient Infected
+	* S2 = Grabbing all Patients belonging to a well known Case
+	* S3 = Grabbing all Patients that were at the same place at the same time
+	* 
+	* Return all EDGEs
+	***************************************/
+	ListAccum<EDGE> @@edgeList;
+	seed = {Patient.*};
+	
+	S1 = SELECT s
+	       FROM seed:s -(INFECTED_BY:e)-> :t
+	       ACCUM @@edgeList += e;
+	
+	S2 = SELECT s
+	         FROM seed:s -(BELONGS_TO_CASE:e)- :t
+	         WHERE t.id NOT IN ("etc", "contact with patient", "overseas inflow")
+	         ACCUM @@edgeList += e;
+	
+	S3 = SELECT s
+	         FROM seed:s -(PATIENT_TRAVELED:e)- :t
+	         WHERE t.outdegree("PATIENT_TRAVELED") > 1
+	         ACCUM @@edgeList += e;
+	
+  PRINT  @@edgeList; 
+}

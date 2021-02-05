@@ -1,0 +1,15 @@
+CREATE QUERY useMap(/* Parameters here */) FOR GRAPH MyGraph SYNTAX v2{
+	/***************************************
+	* Grab a Unique Count of those Patinets 
+  * located in South Korean Cities
+	***************************************/
+  MapAccum<STRING, SetAccum<STRING>> @@patientsByCityMap;
+	//OrAccum @visted;
+  C1 = {City.*};
+	S1 = SELECT v1 FROM C1:v1-(TRAVEL_EVENT_IN:e1)-TravelEvent:v2-(PATIENT_TRAVELED:e2)-Patient:v3
+	               //WHERE v3.@visted == false
+	               ACCUM @@patientsByCityMap += (v1.city -> v3.patient_id);
+	               //POST-ACCUM v3.@visted = true;
+
+  PRINT @@patientsByCityMap As Patient_Count_In_City; 
+}

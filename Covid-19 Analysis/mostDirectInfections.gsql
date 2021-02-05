@@ -1,0 +1,17 @@
+CREATE QUERY mostDirectInfections() FOR GRAPH MyGraph {
+	/************************************************* 
+	* Which person infected the most people directly?
+	**************************************************/
+	
+	SumAccum<int> @directInfections;
+
+	Start (ANY) = {Patient.*};
+	
+	//while Start.size() > 0 do
+	  Start = select s from Start:s-(reverse_INFECTED_BY:e)-Patient:t
+	          accum s.@directInfections += 1
+	          order by s.outdegree("reverse_INFECTED_BY") desc
+	          limit 1;
+	
+	print Start as Answer;
+}

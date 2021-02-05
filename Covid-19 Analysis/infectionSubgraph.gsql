@@ -1,0 +1,44 @@
+CREATE QUERY infectionSubgraph(vertex<Patient> p) FOR GRAPH MyGraph { 
+	/**********************************************************
+	 * This query takes a single patient and finds all all infections and potential infections. 
+	 * Potential infections are determined by who came into contact with this person 
+	 * (directly or indirectly) within the symptom onset to release date time frame.
+	 * 
+	 * Sample Parameter: patient 4100000006
+   *********************************************************/
+	
+  DATETIME STARTTIME, ENDTIME;
+	OrAccum @visited;
+	SetAccum<EDGE> @@edgeSet;
+  STARTTIME = p.symptom_onset_date;
+	ENDTIME = p.released_date;
+	
+	Infected (ANY) = {p};
+	Infected = select s from Infected:s
+	           accum s.@visited = true;
+	
+	while Infected.size() > 0 limit 100 do
+	  Places = select t from Infected:s-(PATIENT_TRAVELED:e)-TravelEvent:t
+	           where (t.visited_date >= STARTTIME and 
+							      t.visited_date <= ENDTIME and 
+							      t.outdegree("PATIENT_TRAVELED") > 1)
+	             and t.@visited == false
+	           accum t.@visited = true,
+	                 @@edgeSet += e; 
+	
+	  SamePlace = select t from Places:s-(PATIENT_TRAVELED:e)-Patient:t
+	              where t.@visited == false 
+	              accum t.@visited = true,
+	                    @@edgeSet += e; 
+	
+	  People = select t from Infected:s-(reverse_INFECTED_BY:e)-:t
+	           where (STARTTIME <= t.symptom_onset_date and ENDTIME >= t.symptom_onset_date)
+	             and t.@visited == false
+	           accum t.@visited = true,
+	                 @@edgeSet += e;
+	
+	  Infected = SamePlace UNION People;
+	end;
+	
+	print @@edgeSet;
+}

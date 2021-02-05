@@ -1,0 +1,17 @@
+CREATE QUERY ageDistribution() FOR GRAPH MyGraph { 
+	/**********************************************************
+	 * This query returns the distribution of the number of 
+	 * recorded deceased patients per age year. 
+	 * 
+	 * There may be some discrepancies in the data which would
+	 * explain some weird occurrences.
+   *********************************************************/
+  MapAccum<int, int> @@ageMap;
+	Start = {Patient.*};
+	
+	Start = select s from Start:s
+	        where s.state != "deceased"
+	        accum @@ageMap += ((year(now()) - s.birth_year) -> 1);
+	
+	print @@ageMap;
+}
