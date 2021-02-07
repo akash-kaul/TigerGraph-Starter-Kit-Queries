@@ -1,0 +1,16 @@
+CREATE QUERY getKhopNeighbor(int k, vertex input) FOR GRAPH MyGraph { 
+	
+	OrAccum<BOOL> @visited;
+	ListAccum<EDGE> @@edgeList;
+	
+  start = {input};
+	
+	WHILE start.size() > 0 limit k DO
+	  start = SELECT t from start-(:e)-:t
+	          WHERE t.@visited == false
+	          ACCUM @@edgeList += e
+	          POST-ACCUM t.@visited = true;
+	END;
+	
+	print @@edgeList;
+}

@@ -1,0 +1,22 @@
+CREATE QUERY getPrescribers(vertex<Prescriber> inputPrescriber) FOR GRAPH MyGraph { 
+  ListAccum<EDGE> @@list;
+	OrAccum<BOOL> @visited;
+	
+	start_set = {inputPrescriber};
+	
+	claims = SELECT t FROM start_set:s-(reverse_submitted_by:e)-:t
+	         ACCUM @@list += e
+	         POST-ACCUM t.@visited = true;
+	
+	patients = SELECT t FROM claims:s-(associated:e)-:t
+	           ACCUM @@list +=e;
+	
+	claims = SELECT t FROM patients:s-(reverse_associated:e)-:t
+	         WHERE t.@visited == false
+	         ACCUM @@list +=e;
+	
+	prescribers = SELECT t FROM claims-(submitted_by:e)-:t
+	              ACCUM @@list +=e;
+	
+	print prescribers, @@list;
+}

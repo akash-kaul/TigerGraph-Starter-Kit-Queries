@@ -1,0 +1,8 @@
+CREATE QUERY ex2_main_query(/* Parameters here */) FOR GRAPH MyGraph { 
+  
+	all_prescribers = {Prescriber.*};
+	
+	all_prescribers = select s from all_prescribers:s accum ex2_createReferralEdge(s);
+  
+  print all_prescribers;
+}

@@ -1,0 +1,27 @@
+CREATE QUERY ex2_createReferralEdge(VERTEX<Prescriber> inputPrescriber) FOR GRAPH MyGraph { 
+	OrAccum<BOOL> @visited, @isReferredClaim;
+	
+	ListAccum<DATETIME> @dateList;
+	
+	start_set = {inputPrescriber};
+	
+	claims = SELECT t FROM start_set:s-(reverse_submitted_by:e)-:t
+	         POST-ACCUM t.@visited = true;
+	
+	patients = SELECT t FROM claims:s-(associated:e)-:t
+	           ACCUM t.@dateList += s.rx_fill_date;
+	
+	claims = SELECT t FROM patients:s-(reverse_associated:e)-:t
+	         WHERE t.@visited == false
+	         ACCUM FOREACH dt in s.@dateList do
+	                 CASE WHEN datetime_diff(dt, t.rx_fill_date) BETWEEN 0 AND 2592000 THEN
+	                   t.@isReferredClaim = true
+	                 END
+	               END
+	         HAVING t.@isReferredClaim == true;
+	
+	prescribers = SELECT t FROM claims-(submitted_by:e)-:t
+	              POST-ACCUM INSERT INTO referral VALUES(inputPrescriber, t, 1);
+	print start_set;
+	
+}
