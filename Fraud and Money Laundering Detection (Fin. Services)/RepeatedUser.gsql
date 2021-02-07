@@ -1,0 +1,77 @@
+CREATE OR REPLACE QUERY RepeatedUser (vertex<User> reciever) for GRAPH AntiFraud {
+/**
+ Given a money receiver, this query is to disover whether there exists relationships among 
+ those people who have sent money to this receiver. 
+   
+  1) Start from a reciever find all her receiving money transactions.
+  2) Find all the senders from the transactions collected in step 1)
+  3) Start from the senders in step 2), go as far as 8 steps from each sender, 
+     find all the senders that are connected to other senders by a path made of 
+     Device_Token, Payment_Instrument, and Users.
+  4) Output all the transactions started by the senders found in step 3) and recieved by the input user.
+
+  Sample input
+  reciever: Recommend to use 1223 as input. Or, try integer between 1 and 500.
+*/
+  
+  SumAccum<int> @msgRcv;
+  OrAccum<bool> @isS, @isRepeated;
+  MaxAccum<vertex> @max;
+  MinAccum<vertex> @min;
+  SetAccum<vertex> @@linkedJoint;
+
+  SetAccum<edge> @@edgeSet;
+ 
+  Start (ANY) = {reciever};
+
+  // get all transactions the receiver get money from.
+  transactions = select t from Start:s-(User_Recieve_Transaction:e)-:t
+          ACCUM @@edgeSet += e
+          post-accum t.@isS += true;
+
+  // get all senders related to the above transactions.
+  Start = select t from transactions:s-(User_Transfer_Transaction_Rev:e)-:t
+          ACCUM @@edgeSet += e
+          post-accum t.@msgRcv += 1,
+                     t.@isS += true,
+                     t.@max = t,
+                     t.@min = t;
+
+  // Traverse 8 step from the senders. min/max is used to find joint node
+  WHILE (Start.size() > 0) limit 8 DO
+    Start = select t from Start:s-((User_to_Device|User_to_Payment):e)-:t
+            WHERE t.@msgRcv == 0
+            ACCUM
+              t.@msgRcv += 1,
+              t.@min += s.@min,
+              t.@max += s.@max
+            POST-ACCUM
+              // when received message from different source
+              CASE WHEN t.@msgRcv > 1 AND t.@min != t.@max THEN
+                @@linkedJoint += t
+              END
+    ;   
+  END;
+
+  Start = {@@linkedJoint};
+
+  // trace back to the source senders from the vertexes that joint multiple paths
+  WHILE (Start.size() > 0) DO
+    Start = select t from Start:s-((User_to_Device|User_to_Payment):e)-:t
+            WHERE t.@msgRcv != 0
+            ACCUM @@edgeSet += e
+            POST-ACCUM
+              s.@msgRcv = 0,
+              CASE WHEN t.@isS THEN
+                t.@isRepeated += true
+              END;
+  END;
+  // get the transactions to output
+  transactions = select s from transactions:s-(User_Transfer_Transaction_Rev:e)-:t
+          where t.@isRepeated == true
+          accum @@edgeSet += e
+  ;
+
+  print transactions [transactions.amount];
+  print @@edgeSet;
+}
