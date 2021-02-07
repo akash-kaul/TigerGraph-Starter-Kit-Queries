@@ -1,0 +1,28 @@
+CREATE QUERY mostReportedDrugsForCompany_v2(STRING companyName, INT k, STRING role) FOR GRAPH faers { 
+  #companyName=PFIZER, K=5,role=PS
+	# Keep count of how many times each drug is mentioned.
+	SumAccum<INT> @numCases;
+
+   # 1. Find all the cases where the given pharma company is the 'mfr_sndr'
+  Company ={PharmaCompany.*};
+  Cases = SELECT c
+  	FROM Company:s -(relatedTo:e)-> ReportedCase:c
+	  WHERE s.mfr_sndr == companyName
+	;
+	
+	#. 2. Find all the drug sequences for the selected cases.
+	DrugSeqs = SELECT ds
+	  FROM Cases:c -(hasSequences:e)-> DrugSequence:ds
+    WHERE (role == "" OR ds.role_cod == role)
+  ;
+	
+	# 3. Count the occurences of each drug mentioned in each drug sequence.
+	TopDrugs = SELECT d
+	  FROM DrugSeqs:ds -(hasDrugs:e)-> Drug:d
+	  ACCUM d.@numCases += 1
+	  ORDER BY d.@numCases DESC
+	  LIMIT k
+	;
+	
+	PRINT TopDrugs;  	
+}
