@@ -1,0 +1,9 @@
+CREATE QUERY select_subgraph(STRING vertexType, STRING edgeType) FOR GRAPH MyGraph { 
+  
+	ListAccum<EDGE> @@edgeList;
+	
+	SourceSet = {vertexType};
+	TargetSet = SELECT t FROM SourceSet:s -(edgeType:e)-> :t
+	            ACCUM @@edgeList += e;
+  PRINT SourceSet, TargetSet, @@edgeList;
+}

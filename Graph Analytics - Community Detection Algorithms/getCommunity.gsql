@@ -1,0 +1,30 @@
+CREATE QUERY getCommunity(STRING prescriberId, INT communityId) FOR GRAPH MyGraph {
+	/* This query finds the vertices and interconnecting edges associated either with the given
+	 * prescriberId, or if the prescriberId is not provided (empty string), then
+	 * for the given communityId.
+	 * NOTE: This algorithm requires that the communityId attribute has been set,
+	 * by running the alg_louvain query,
+	 */
+	SetAccum<EDGE> @@edgeList;
+	INT commId;
+	
+	// Set commId
+  Start = {Prescriber.*};
+  IF prescriberId != "" THEN
+	  Comm = SELECT v
+	    FROM Start:v
+	    WHERE v.Prescriber_id == prescriberId
+	    POST-ACCUM commId = v.communityId;
+	ELSE
+	  commId = communityId;
+	END;
+	PRINT commId;
+	
+	// Get all the vertices and intercomnnecting edges with the give commId
+	commVertices = SELECT s
+	  FROM Start:s -(referral:e)-> :t
+	  WHERE s.communityId == commId AND t.communityId == commId
+	  ACCUM @@edgeList += e;
+	PRINT commVertices[commVertices.Prescriber_id];
+	PRINT @@edgeList;
+}

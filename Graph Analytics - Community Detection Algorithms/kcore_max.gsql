@@ -1,0 +1,27 @@
+CREATE QUERY kcore_max (STRING vertexType, STRING edgeType, BOOL inducedEdges, INT verbosity) FOR GRAPH MyGraph {
+/* An implementation of Algorithm 2 in
+ * Scalable K-Core Decomposition for Static Graphs Using a Dynamic Graph Data Structure,
+ * Tripathy et al., IEEE Big Data 2018.
+ */
+ 
+ 	MapAccum<INT, SetAccum<VERTEX>> @@coreListMap; // Map <k, k-core_vertex_set>
+	SetAccum<VERTEX> @@kcoreVertices;              // vertex set for kMax
+	ListAccum<EDGE> @@inducedEdges;                // optional output
+	INT k;
+	
+  @@coreListMap += kcore_sub(vertexType, edgeType, verbosity); // get vertex core numnbers
+	k = @@coreListMap.size() - 1;
+	@@kcoreVertices = @@coreListMap.get(k);   
+	coreV = @@kcoreVertices;
+	
+	// Print the results
+	IF verbosity > 0 THEN PRINT "verbosity", @@coreListMap; END;
+	PRINT k, @@kcoreVertices.size(), @@kcoreVertices;
+  IF inducedEdges THEN
+      Q = SELECT s
+          FROM coreV:s -(edgeType:e)-> :t
+	        WHERE t IN @@kcoreVertices
+	        ACCUM @@inducedEdges += e;
+	    PRINT @@inducedEdges;
+	END;
+}

@@ -1,0 +1,11 @@
+CREATE QUERY insert_all_referrals () FOR GRAPH MyGraph { 
+  
+	SumAccum<INT> @@numInsertions;
+	
+	all_prescribers = {Prescriber.*};
+	
+	all_prescribers = SELECT s FROM all_prescribers:s
+	      ACCUM @@numInsertions += insert_referrals(s);
+	
+	PRINT @@numInsertions;
+}

@@ -1,0 +1,20 @@
+CREATE QUERY Print_community(vertex<Prescriber> inputPrescriber) FOR GRAPH MyGraph { 
+  /* Write query logic here */ 
+  //PRINT "Print_community works!";
+	
+	ListAccum<EDGE> @@edgeList;
+	
+	SumAccum<int> @@cid;
+	
+	Start={inputPrescriber};
+	Start=Select s from Start:s post-accum @@cid += s.communityId;
+	
+	Start = {Prescriber.*};
+	
+	Start = select s from Start:s-(referral:e)-:t 
+	        where s.communityId == @@cid and s.communityId == t.communityId
+	        accum @@edgeList += e;
+	
+	print Start;
+	print @@edgeList;
+}

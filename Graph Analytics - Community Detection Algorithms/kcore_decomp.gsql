@@ -1,0 +1,49 @@
+CREATE QUERY kcore_decomp(STRING vertexType, STRING edgeType, INT kMin, INT kMax = -1, BOOL showMembership=false, BOOL showShells=true) 
+FOR GRAPH MyGraph { 
+/* Outputs the k-core vertex membership for each value of k from kMin to kMax.
+ * By definition, for k=0, the vertex set = the entire graph.
+ * As k increases, V(k) is a subset of V(k-1).
+ * If kMax < 0, then the query proceeds until it reaches the maximal k-core.
+ * Calls kcore_sub().
+ */
+ 	MapAccum<INT, SetAccum<VERTEX>> @@coreListMap; // Map <k, k-core_vertex_set>
+	SetAccum<VERTEX> @@kcoreVertices;              // vertex set for kMax
+	ListAccum<EDGE> @@inducedEdges;                // optional output
+	INT kUpper;                        // actual max K
+	INT printUpper;                    // max value of K to output
+
+	
+  @@coreListMap += kcore_sub(vertexType, edgeType, 1);
+	kUpper = @@coreListMap.size() - 1;
+	IF kMax < 0 THEN
+	  printUpper = kUpper;
+	ELSE
+	  printUpper = kMax;
+	END;
+	
+// First, print just the size of each k-core	
+	FOREACH k IN RANGE [kUpper, kMin].STEP(-1) DO
+	    IF @@coreListMap.get(k).size() > 0 THEN      // If the k-shell has some vertices
+	        @@kcoreVertices += @@coreListMap.get(k);
+	        IF k BETWEEN kMin and printUpper THEN 
+	            PRINT k,@@kcoreVertices.size();
+          END;
+	    END;
+	END;
+	
+// Next, print the membership of each k-core
+	IF showMembership THEN
+	    FOREACH k IN RANGE [kUpper, kMin].STEP(-1) DO
+	        IF @@coreListMap.get(k).size() > 0 THEN      // If the k-shell has some vertices
+	            @@kcoreVertices += @@coreListMap.get(k);
+	            IF k BETWEEN kMin and printUpper THEN
+	                IF showShells THEN
+	                  PRINT k, @@coreListMap.get(k);
+	                ELSE
+	                  PRINT k,@@kcoreVertices;
+	                END;
+              END;
+	        END;
+	    END;
+	END;
+}
