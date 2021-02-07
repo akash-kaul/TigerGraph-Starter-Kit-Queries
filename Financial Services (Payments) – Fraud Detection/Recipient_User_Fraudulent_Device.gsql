@@ -1,0 +1,27 @@
+CREATE QUERY Recipient_User_Fraudulent_Device() FOR GRAPH MyGraph SYNTAX v2 { 
+	/***********************************************************
+	 *  This query uses syntax v2.
+	 *  This query prints out the subgraphs of payments
+	 *  whose phone number is attached to the device previously
+	 *  involved in fraud along with the fraudulent device.
+	 **********************************************************/
+	
+	SetAccum<edge> @@edges;
+	
+  payments = {payment.*};
+
+	FraudulentRecipientDevice = 
+	 select device2
+	 from payments:p - (receives>:r2)- user_account:uact2 -(<sets_up:rset2)- user:usr2
+	-(authenticated_by_num>:edgenum2)- phone_number:phone2 -(<used_with:edgedevice2)- device:device2 
+	  where device2.trust_score < 0.1;
+
+	hop4 = select t from FraudulentRecipientDevice:s-(used_with>:e)-phone_number:t accum @@edges += e;
+	hop3 = select t from hop4:s-(<authenticated_by_num:e)-user:t accum @@edges += e;
+	hop2 = select t from hop3:s-(sets_up>:e)-user_account:t accum @@edges += e;
+	hop1 = select t from hop2:s-((<receives | sends>):e)-payment:t accum @@edges += e;
+	
+	print @@edges;
+	PRINT FraudulentRecipientDevice;
+	print hop1;
+}

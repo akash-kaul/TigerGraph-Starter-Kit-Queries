@@ -1,0 +1,45 @@
+CREATE QUERY Common_Customers(vertex<merchant_account> Merchant1, vertex<merchant_account> Merchant2) FOR GRAPH MyGraph { 
+  OrAccum @visited;
+  SetAccum<edge> @@edgeSet;
+  Mer1 =  {Merchant1};
+  Mer2 =  {Merchant2};
+
+  /* Step 1 – Start graph Traversal from first merchant to find all associated payments. Use visited flag to remember payments visited. */
+  payments1 = select t
+              from Mer1:s -(reverse_receives_pmnt:e)-> payment:t
+              accum t.@visited += true;
+ 
+	//PRINT payments1;
+  /* Step 2 – For those payments, find all the linked customers. */
+  customer1 = select t
+              from payments1:s -(reverse_sends:e)-> user_account:t
+              accum t.@visited += true;
+
+  //PRINT customer1;
+	/* Step 3 Start graph traversal from second merchant to find all payments */
+  payments2 = select t
+              from Mer2:s -(reverse_receives_pmnt:e)-> payment:t
+              accum t.@visited += true;
+
+  //PRINT payments2;
+	/* Step 4 – Find common customers by starting from payments in Step 3 */    
+  common_customers = select t
+                     from payments2:s -(reverse_sends:e)-> user_account:t
+                     where t.@visited == true;
+   print common_customers;
+	
+  /* Step 5 – From common customers find all payments that have been visited in earlier steps. Collect the edges so they can be printed.*/    
+  payments = select t
+             from common_customers:s -(sends:e)-> payment:t
+             where t.@visited == true
+             accum @@edgeSet += e;
+  print payments;
+
+	/* Step 6 – From payments find associated merchants. Collect and print edges (payments – merchants) and merchants. */
+  merchant = select t
+             from payments:s -(receives_pmnt:e)-> merchant_account:t
+             accum @@edgeSet += e;
+	
+  print merchant;
+  print @@edgeSet;
+}

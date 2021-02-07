@@ -1,0 +1,29 @@
+CREATE QUERY kHop_Flagged(Vertex input, int k) FOR GRAPH MyGraph { 
+	/***********************************************************
+	 *  This is a query using v1 syntax. 
+	 *  We start with a single vertex of one of these types:
+	 *  Account / Payment / User 
+	 *  and we want to find all the payment / device/ user
+	 *  vertices with a trust-score lower than 0.1.
+	 *  We also limit the number of total hops to k.
+	 *
+	 *  Sample Parameters:
+	 *      input = payment1
+	 *      k = 4 +
+	 **********************************************************/
+	
+  SetAccum<vertex> @@warnings;	
+	
+	Start (ANY) = {input};
+	
+	foreach i in range [1,k] do 
+	  Start = select t from Start:s-((authenticated_by_num | reverse_authenticated_by_num | sets_up | reverse_sets_up | authenticated_by_email | reverse_authenticated_by_email | used_with | reverse_used_with | associated_with | reverse_associated_with | sends | reverse_sends | receives | reverse_receives | user_account_bank | reverse_user_account_bank | merchant_account_device | reverse_merchant_account_device | receives_pmnt | reverse_receives_pmnt | sends_pmnt | reverse_sends_pmnt | merchant_account_bank | reverse_merchant_account_bank):e)-:t
+	          accum 
+	            if t.trust_score < 0.1 AND (t.type == "device" or t.type == "payment" or t.type == "user") then
+	              @@warnings += t
+              end;
+	end;
+
+	Flagged = @@warnings;
+	print Flagged;
+}
