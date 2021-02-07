@@ -1,0 +1,6 @@
+CREATE QUERY hello(vertex<person> p) FOR GRAPH social { 
+  Start = {p};
+  Result = SELECT tgt
+           FROM Start:s-(friendship:e) ->person:tgt;
+  PRINT Result;
+}

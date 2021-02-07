@@ -1,0 +1,17 @@
+CREATE QUERY hello2(vertex<person> p) FOR GRAPH social { 
+  OrAccum  @visited = false;
+  AvgAccum @@avgAge;
+  Start = {p};
+
+  FirstNeighbors = SELECT tgt
+                   FROM Start:s -(friendship:e)-> person:tgt
+                   ACCUM tgt.@visited += true, s.@visited += true;
+
+  SecondNeighbors = SELECT tgt
+                    FROM FirstNeighbors -(:e)-> :tgt
+                    WHERE tgt.@visited == false
+                    POST_ACCUM @@avgAge += tgt.age;
+
+  PRINT SecondNeighbors;
+  PRINT @@avgAge;
+}
