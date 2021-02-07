@@ -1,0 +1,19 @@
+CREATE QUERY weight_initialization() FOR GRAPH CitationGraph { 
+	/*This query initializes the weights for the neural network. The neural network has 1433 neurons in the input layer, 16 neurons in the hidden layer and 7 neurons in the output layer*/	
+	INT input_dim = 1433;
+	INT hidden_dim = 16;
+	INT output_dim = 7;
+	
+	WORDs = {WORD.*};
+		
+	LAYER_0s = SELECT t FROM WORDs:s -(:e)->LAYER_0:t
+	           ACCUM 
+	             e.weight = 2*sqrt(6.0/(input_dim+hidden_dim))*(rand_uniform()-0.5);
+		
+	LAYER_0s = {LAYER_0.*};
+	LAYER_1s = SELECT t FROM LAYER_0s:s -(:e)->LAYER_1:t
+	           ACCUM
+	             e.weight = 2*sqrt(6.0/(output_dim+hidden_dim))*(rand_uniform()-0.5);
+		
+	PRINT "weight_initialization finished";
+}

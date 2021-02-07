@@ -1,0 +1,157 @@
+CREATE QUERY training(
+	DOUBLE alpha0 = 0.4, #initial learning rate
+	BOOL Adam = True,    #enable Adam optimizer. If False, constant learning rate will be used
+	DOUBLE beta1 = 0.9,  #hyperparameter for Adam optimizer
+	DOUBLE beta2 = 0.999, #hyperparameter for Adam optimizer
+	DOUBLE keepProb = 1.0, #keep probability for the dropout regularization 
+	DOUBLE lambda = 0.00005, # L2 regularization factor
+	INT MaxIter = 10) # number of epochs
+FOR GRAPH CitationGraph { 
+	/*This query trains the graph convolutional neural network on the training dataset and evaluates the loss on the validation data and the prediction accuracy on the testing data. */
+  ArrayAccum<SumAccum<DOUBLE>> @@W_0[1433][16]; #1433 by 16
+	ArrayAccum<SumAccum<DOUBLE>> @@W_1[16][7];   #16 by 7
+  ArrayAccum<SumAccum<DOUBLE>> @@dW_0[1433][16]; #1433 by 16
+	ArrayAccum<SumAccum<DOUBLE>> @@dW_1[16][7];   #16 by 7
+	ArrayAccum<SumAccum<DOUBLE>> @@VdW_0[1433][16]; #1433 by 16
+	ArrayAccum<SumAccum<DOUBLE>> @@VdW_1[16][7];   #16 by 7
+	ArrayAccum<SumAccum<DOUBLE>> @@SdW_0[1433][16]; #1433 by 16
+	ArrayAccum<SumAccum<DOUBLE>> @@SdW_1[16][7];   #16 by 7
+	SumAccum<DOUBLE> @@Training_Loss;
+	SumAccum<DOUBLE> @@Validation_Loss;
+	SumAccum<DOUBLE> @@accurate_cnt;
+	
+  MapAccum<INT, DOUBLE> @words;
+	ArrayAccum<SumAccum<DOUBLE>> @zeta_0[16];
+	ArrayAccum<SumAccum<DOUBLE>> @zeta_1[7];
+	ArrayAccum<SumAccum<DOUBLE>> @dzeta_0[16];
+	ArrayAccum<SumAccum<DOUBLE>> @dzeta_1[7];
+	ArrayAccum<SumAccum<DOUBLE>> @z_0[16];
+	ArrayAccum<SumAccum<DOUBLE>> @z_1[7];
+	ArrayAccum<SumAccum<DOUBLE>> @dz_0[16];
+	ArrayAccum<SumAccum<DOUBLE>> @dz_1[7];
+	ArrayAccum<SumAccum<DOUBLE>> @y[7];
+	INT iter = 0;
+	DOUBLE alpha;
+	INT train_cnt = 140;
+	INT val_cnt = 500;
+	INT test_cnt = 1000;
+	## load weights into @@W_0 and @@W_1
+	WORDs = {WORD.*};
+	LAYER_0s = SELECT t FROM WORDs:s -(:e)->LAYER_0:t
+	           ACCUM 
+	             @@W_0[s.indx][t.indx] += e.weight;
+
+	
+	LAYER_1s = SELECT t FROM LAYER_0s:s -(:e)->LAYER_1:t
+	           ACCUM
+	             @@W_1[s.indx][t.indx] += e.weight;
+	
+	## forward propagation
+	Start = {PAPER.*};
+  alpha = alpha0;
+
+WHILE iter < MaxIter  DO
+	## input -> hidden layer0
+	@@Training_Loss = 0;
+	@@Validation_Loss = 0;
+	@@accurate_cnt = 0;
+	@@dW_0.reallocate(1433,16);
+	@@dW_1.reallocate(16,7);
+	Start = SELECT s FROM Start:s
+	        POST-ACCUM 
+	          s.@zeta_0.reallocate(16),
+	          s.@z_0.reallocate(16),
+	          s.@zeta_1.reallocate(7),
+	          s.@z_1.reallocate(7),	
+	          s.@dzeta_0.reallocate(16),
+	          s.@dz_0.reallocate(16),
+	          s.@dzeta_1.reallocate(7),
+	          s.@dz_1.reallocate(7),
+	          s.@words = dropout_SparseVector(s.words, keepProb),
+	          s.@zeta_0 += product_Matrix_SparseVector(@@W_0, s.@words)
+	          ;
+
+	## convolve
+	Start = SELECT s FROM Start:s -(CITE:e)->PAPER:t
+	        ACCUM t.@z_0 += product_ArrayAccum_const(s.@zeta_0,e.weight)
+	        POST-ACCUM
+	          s.@z_0 = ReLU_ArrayAccum(s.@z_0),
+	          s.@z_0 = dropout_ArrayAccum(s.@z_0, keepProb),
+## hidden layer0 -> hidden layer1
+	          s.@zeta_1 += product_Matrix_Vector(@@W_1, s.@z_0)
+	          ;
+	          
+	## convolve
+	Start = SELECT s FROM Start:s -(CITE:e)->PAPER:t
+	        ACCUM t.@z_1 += product_ArrayAccum_const(s.@zeta_1,e.weight)
+	        POST-ACCUM
+	          s.@y = softmax_ArrayAccum(s.@z_1),
+	          CASE 
+	           WHEN s.train THEN
+	            s.@dz_1 = diff_ArrayAccum_oneHotVec(s.@y,s.class_label),
+	            @@Training_Loss += -log(s.@y[s.class_label])
+	           WHEN s.validation THEN 
+	            @@Validation_Loss += -log(s.@y[s.class_label])
+	           WHEN s.test THEN
+	            INT y_prediction = 0,
+	            DOUBLE maxProb = s.@y[0],
+	            FOREACH i IN RANGE[1,6] DO
+	              IF s.@y[i] > maxProb THEN y_prediction = i, maxProb = s.@y[i] END
+	            END,
+	            IF y_prediction == s.class_label THEN @@accurate_cnt += 1 END
+	          END;
+
+	## backpropagation
+	
+	Training1 = SELECT t FROM Start:s -(CITE:e)->PAPER:t
+	        WHERE s.train
+	        ACCUM t.@dzeta_1 += product_ArrayAccum_const(s.@dz_1,e.weight)
+	        POST-ACCUM
+	          t.@dz_0 += product_Vector_Matrix(@@W_1,t.@dzeta_1),
+	          t.@dz_0 = greater_than_zero_ArrayAccum_ArrayAccum(t.@dz_0, t.@z_0),
+	          FOREACH i IN RANGE[0,15] DO
+	            FOREACH j IN RANGE[0,6] DO
+	              @@dW_1[i][j] += t.@z_0[i]*t.@dzeta_1[j]
+	            END
+	          END
+	          ;
+	Training0 = SELECT t FROM Training1:s -(CITE:e)->PAPER:t
+	        ACCUM t.@dzeta_0 += product_ArrayAccum_const(s.@dz_0,e.weight)
+	        POST-ACCUM
+	          FOREACH (k,v) IN t.@words DO
+	            FOREACH i IN RANGE[0,15] DO
+	              @@dW_0[k][i] += v*t.@dzeta_0[i]
+	            END
+	          END
+	          ;
+	@@Training_Loss += lambda*L2Norm_Matrix(@@W_0);
+	@@dW_0 += product_Matrix_const(@@W_0, lambda);
+#	@@dW_1 += product_Matrix_const(@@W_1, lambda);  // only apply to the first layer
+	iter = iter + 1;
+	IF Adam THEN
+	@@VdW_0 = product_Matrix_const(@@VdW_0,beta1)+product_Matrix_const(@@dW_0,1-beta1);
+	@@VdW_1 = product_Matrix_const(@@VdW_1,beta1)+product_Matrix_const(@@dW_1,1-beta1);
+	@@SdW_0 = product_Matrix_const(@@SdW_0,beta2)+product_MatrixSqr_const(@@dW_0,1-beta2);
+	@@SdW_1 = product_Matrix_const(@@SdW_1,beta2)+product_MatrixSqr_const(@@dW_1,1-beta2);	
+	@@W_0 += AdamGrdient(@@VdW_0,@@SdW_0,iter,alpha,beta1,beta2);
+	@@W_1 += AdamGrdient(@@VdW_1,@@SdW_1,iter,alpha,beta1,beta2);
+  ELSE
+	@@W_0 += product_Matrix_const(@@dW_0, -alpha);
+	@@W_1 += product_Matrix_const(@@dW_1, -alpha);
+	END;
+
+	
+	PRINT iter,@@Training_Loss/train_cnt AS Training_Loss,@@Validation_Loss/val_cnt AS Validation_Loss,@@accurate_cnt/test_cnt AS accuracy;//,@@train_accurate_cnt,@@val_accurate_cnt;
+END;	
+	
+	## persist @@W_0 and @@W_1 in weights
+	WORDs = {WORD.*};
+	LAYER_0s = SELECT t FROM WORDs:s -(:e)->LAYER_0:t
+	           ACCUM 
+	             e.weight = @@W_0[s.indx][t.indx];
+
+	LAYER_1s = SELECT t FROM LAYER_0s:s -(:e)->LAYER_1:t
+	           ACCUM
+	             e.weight = @@W_1[s.indx][t.indx];
+	
+}

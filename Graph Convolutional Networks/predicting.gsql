@@ -1,0 +1,63 @@
+CREATE QUERY predicting() FOR GRAPH CitationGraph { 
+  ArrayAccum<SumAccum<DOUBLE>> @@W_0[1433][16]; #1433 by 16
+	ArrayAccum<SumAccum<DOUBLE>> @@W_1[16][7];   #16 by 7
+	SumAccum<DOUBLE> @@accurate_cnt;
+	SetAccum<EDGE<CITE>> @@Graph;
+	ArrayAccum<SumAccum<DOUBLE>> @zeta_0[16];
+	ArrayAccum<SumAccum<DOUBLE>> @zeta_1[7];
+	ArrayAccum<SumAccum<DOUBLE>> @z_0[16];
+	ArrayAccum<SumAccum<DOUBLE>> @z_1[7];
+	SumAccum<INT> @prediction;
+  
+	
+	INT test_cnt = 1000;
+	## load weights into @@W_0 and @@W_1
+	WORDs = {WORD.*};
+	LAYER_0s = SELECT t FROM WORDs:s -(:e)->LAYER_0:t
+	           ACCUM 
+	             @@W_0[s.indx][t.indx] += e.weight;
+
+	
+	LAYER_1s = SELECT t FROM LAYER_0s:s -(:e)->LAYER_1:t
+	           ACCUM
+	             @@W_1[s.indx][t.indx] += e.weight;
+	
+	## forward propagation
+	Start = {PAPER.*};
+
+	## input -> hidden layer0
+	@@accurate_cnt = 0;
+
+	Start = SELECT s FROM Start:s
+	        POST-ACCUM 
+	          s.@prediction = -1,
+	          s.@zeta_0 += product_Matrix_SparseVector(@@W_0, s.words)
+	          ;
+
+	## convolve
+	Start = SELECT s FROM Start:s -(CITE:e)->PAPER:t
+	        ACCUM t.@z_0 += product_ArrayAccum_const(s.@zeta_0,e.weight)
+	        POST-ACCUM
+	          s.@z_0 = ReLU_ArrayAccum(s.@z_0),
+## hidden layer0 -> hidden layer1
+	          s.@zeta_1 += product_Matrix_Vector(@@W_1, s.@z_0)
+	          ;
+	          
+	## convolve
+	Start = SELECT t FROM Start:s -(CITE:e)->PAPER:t
+	        WHERE t.test
+	        ACCUM 
+	          t.@z_1 += product_ArrayAccum_const(s.@zeta_1,e.weight),
+            @@Graph += e	
+	        POST-ACCUM
+	            INT y_prediction = 0,
+	            DOUBLE maxProb = t.@z_1[0],
+	            FOREACH i IN RANGE[1,6] DO
+	              IF t.@z_1[i] > maxProb THEN y_prediction = i, maxProb = t.@z_1[i] END
+	            END,
+	            t.@prediction = y_prediction,
+	            IF y_prediction == t.class_label THEN @@accurate_cnt += 1 END
+	          ;
+	PRINT @@accurate_cnt/test_cnt AS accuracy;
+	PRINT @@Graph,Start[Start.@prediction,Start.class_label];
+}

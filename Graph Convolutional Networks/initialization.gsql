@@ -1,0 +1,21 @@
+CREATE QUERY initialization(/* Parameters here */) FOR GRAPH CitationGraph { 
+	/*This query normalizes the weights on CITE edges according to the outdegrees(CITE) of the source and target vertices, normalizes the weights on HAS edges according the outdegrees(HAS) of the PAPER vertices, populates the words attribute with (word indx -> weight), and splits PAPER vertices into testing, validation and training sets, */
+	MapAccum<INT,DOUBLE> @wordMap;
+	
+  Papers = {PAPER.*};
+	
+	Papers = SELECT s FROM Papers:s -(CITE:e)->PAPER:t
+	         ACCUM e.weight = 1.0/(pow(s.outdegree("CITE"),0.5)*pow(t.outdegree("CITE"),0.5));
+		
+	Papers = SELECT s FROM Papers:s -(HAS:e)->WORD:t
+	         ACCUM 
+	           s.@wordMap += (t.indx->e.weight/s.outdegree("HAS"))
+	         POST-ACCUM 
+	           CASE 
+	             WHEN s.indx <= 139 THEN s.train = TRUE
+	             WHEN 139 < s.indx AND s.indx <= 639 THEN s.validation = TRUE
+	             WHEN 1708 <= s.indx AND s.indx < 2708 THEN s.test = TRUE
+	           END,
+	           s.words = s.@wordMap;
+  PRINT "initialization finishes!";
+}
