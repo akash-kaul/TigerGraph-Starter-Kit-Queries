@@ -1,0 +1,17 @@
+CREATE QUERY README(/* Parameters here */) FOR GRAPH LowRankApproximation { 
+    /* 
+The LowRankApproximation Starter Kit factorize a loaded sparse matrix A into two low-rank matrices U and V such that the matrix product of U and the transpose of V can approximate the original sparse matrix A. The U and V are obtained by minimize the Frobenius norm (or the root mean squer error) of A - U*transpose(V) using gradient descent algorithm.
+To compute U and V, run the queries below in sequence 
+1. initialization
+2. factorization
+
+To compare the approximated matrix with the original matrix, run the queries below
+compare_approximation
+
+To print out the matrices U and V, run print_result
+
+The order of the queries need to be followed to ensure the correctness of the result.
+*/ 
+	
+  PRINT "README works!"; 
+}

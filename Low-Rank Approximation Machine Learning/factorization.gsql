@@ -1,0 +1,84 @@
+CREATE QUERY factorization(DOUBLE learning_rate = 0.001, DOUBLE regularization_factor = 0.00005, INT Iter=30) FOR GRAPH LowRankApproximation {
+	//This query factorize the loaded sparse matrix into two low-rank matrices U and V using gradient descent algorithm 
+	//The length of row vectors is set as 19. This number has to be the same as the len_of_rowVector in the initialization query
+	//The query inputs are the learning rate, regularization_factor and the number of iterations
+	//The query output the root mean square error (RMSE) between the loaded matrix and the product of matrices U and the transpose of V for each iteration
+	ListAccum<DOUBLE> @tmp;
+	ArrayAccum<SumAccum<double>> @u[19];     // row vector of matrix U 
+	ArrayAccum<SumAccum<double>> @v[19];         // row vector of matrix V
+	ArrayAccum<SumAccum<double>> @Gradient[19];  // gradient of the row vector
+	SumAccum<DOUBLE> @@RMSE;            // RMSE for the training data
+	
+	//The length of row vectors is set as 19. This number has to be the same as the len_of_rowVector in the initialization query
+  INT len_of_rowVector = 19;
+  DOUBLE cnt_element = 100011;  //The number of the existing element in the loaded matrix (i.e. the count of MATRIX_ELEMENT edges).
+	INT iteration = 0;
+
+	// pass u and v to local accum
+
+	MATRIX_U = {MATRIX_ROW.*};
+
+	MATRIX_U = SELECT s FROM MATRIX_U:s
+	         ACCUM
+	           FOREACH i IN RANGE[0,len_of_rowVector-1] DO
+	             s.@u[i] += s.u.get(i)
+	           END;
+
+	MATRIX_V = {MATRIX_COLUMN.*};
+	MATRIX_V = SELECT s FROM MATRIX_V:s
+	        ACCUM
+	           FOREACH i IN RANGE[0,len_of_rowVector-1] DO
+	             s.@v[i] += s.v.get(i)
+	           END;
+   
+	// obtain the row vectors using gradient descent algorithm
+	WHILE TRUE LIMIT Iter DO
+	@@RMSE = 0;
+	iteration = iteration+1;
+	MATRIX_U = SELECT s FROM MATRIX_U:s
+	        ACCUM
+	          s.@Gradient.reallocate(len_of_rowVector);
+
+  MATRIX_V = SELECT s FROM MATRIX_V:s
+	        ACCUM
+	          s.@Gradient.reallocate(len_of_rowVector);
+
+	MATRIX_U = SELECT s FROM MATRIX_U:s -(MATRIX_ELEMENT:e)-> MATRIX_COLUMN:t
+	        ACCUM
+	          DOUBLE delta = dotProduct_ArrayAccum_ArrayAccum(s.@u,t.@v),    //The dotProduct_ArrayAccum_ArrayAccum() function return the dot product of two vectors
+	          delta = delta-e.element_value,
+	          @@RMSE += delta*delta,
+	          s.@Gradient += product_ArrayAccum_const(t.@v,delta),          //The product_ArrayAccum_const() function return the product of a vector and a constant scalar
+	          t.@Gradient += product_ArrayAccum_const(s.@u,delta)
+	        POST-ACCUM
+	          s.@Gradient += product_ArrayAccum_const(s.@u,regularization_factor),
+	          s.@u += product_ArrayAccum_const(s.@Gradient,-learning_rate),
+	          t.@Gradient += product_ArrayAccum_const(t.@v,regularization_factor),
+	          t.@v += product_ArrayAccum_const(t.@Gradient,-learning_rate);
+
+  @@RMSE = sqrt(@@RMSE/cnt_element);
+	PRINT iteration;
+	PRINT @@RMSE;
+
+	END;
+
+
+	// pass local accum to u and v
+	MATRIX_U = SELECT s FROM MATRIX_U:s
+	         POST-ACCUM
+	           s.@tmp.clear(),
+	           FOREACH i IN RANGE[0,len_of_rowVector-1] DO
+	             s.@tmp += s.@u[i]
+	           END,
+	           s.u = s.@tmp;
+
+
+	MATRIX_V = SELECT s FROM MATRIX_V:s
+	        POST-ACCUM
+	           s.@tmp.clear(),
+	           FOREACH i IN RANGE[0,len_of_rowVector-1] DO
+	             s.@tmp += s.@v[i]
+	           END,
+	           s.v = s.@tmp;
+
+}

@@ -1,0 +1,12 @@
+CREATE QUERY print_result(/* Parameters here */) FOR GRAPH LowRankApproximation { 
+	// This query print out two matrices U and V factorized from the loaded sparse matrix. The row index of the U and V are shown as the v_id of MATRIX_ROW and MATRIX_COLUMN respectively. The row vectors of each row are shown as MATRIX_U.u and MATRIX_V.v. 
+  MATRIX_U = {MATRIX_ROW.*};
+	MATRIX_U = SELECT s FROM MATRIX_U:s
+	           ORDER BY str_to_int(s.row_index) ASC;
+	PRINT MATRIX_U [MATRIX_U.u];
+	
+	MATRIX_V = {MATRIX_COLUMN.*};
+	MATRIX_V = SELECT s FROM MATRIX_V:s
+	           ORDER BY str_to_int(s.column_index) ASC;
+  PRINT MATRIX_V [MATRIX_V.v];
+}

@@ -1,0 +1,16 @@
+CREATE QUERY compare_approximation(VERTEX<MATRIX_ROW> row_index) FOR GRAPH LowRankApproximation { 
+	//This query output the element values of one row of the loaded matrix specified by the inputed row index together with the approximated element values 
+	//The query input is a row index
+	//The query output is all the existing element values in the given row. The column index is shown as the v_id of the MATRIX_COLUMN vertex. 
+  SumAccum<DOUBLE> @approximated_value;
+	SumAccum<DOUBLE> @real_value;
+	src = {row_index};
+	
+	MATRIX = SELECT t FROM src:s -(MATRIX_ELEMENT:e)-> MATRIX_COLUMN:t
+	        ACCUM
+	          t.@approximated_value += dotProduct_List_List(s.u,t.v),
+	          t.@real_value += e.element_value
+	        ORDER BY str_to_int(t.column_index) ASC;
+
+	PRINT MATRIX[MATRIX.@real_value,MATRIX.@approximated_value];
+}
