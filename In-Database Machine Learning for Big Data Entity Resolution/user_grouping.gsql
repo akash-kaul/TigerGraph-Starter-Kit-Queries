@@ -1,0 +1,110 @@
+CREATE QUERY user_grouping(/* Parameters here */) FOR GRAPH Entity_Resolution { 
+	// This query groups users connected by the SameAs edges.
+	// It finds the connected users using connected component algorithm.
+	// In each component, it connects all attributes from other users to the lead user 
+	// At the end, it deletes the users that are not the lead user
+	
+	MinAccum<VERTEX<User>> @new_User; //each vertex has an internal ID (int) in TigerGraph. MinAccum<VERTEX> aggregates the minimum internal vertex ID. 
+	MinAccum<VERTEX<User>> @old_User;
+	OrAccum<bool> @active;
+	bool converged = FALSE;
+	
+	Start = {User.*};
+	
+	// initialize each user with itself as the lead of the component
+	Start = SELECT s FROM Start:s
+	POST-ACCUM
+			s.@old_User = s,
+			s.@new_User = s;
+  
+	// This block assigns the smallest vertex ID of a connected component to all the vertex in the component.
+	WHILE (Start.size()>0) DO
+		Start = SELECT t
+			FROM Start:s -(SameAs:e)-> User:t
+	      // Propagate the internal IDs from source to target vertex
+			  ACCUM t.@new_User += s.@new_User // update the ID with the smallest ID of its neighbors
+			POST-ACCUM
+				CASE WHEN t.@old_User != t.@new_User THEN 
+					t.@old_User = t.@new_User,
+					t.@active = true
+				ELSE 
+					t.@active = false
+				END
+			HAVING t.@active == true
+			;
+	END;
+	
+	// the SameAs edge is no longer needed after finding the connected components
+	Start = {User.*};
+	DELETE e FROM Start:s -(SameAs:e)-> User:t;
+
+	// The rest of the query merge all the users in each connected component into one vertex. 
+	Start = SELECT s FROM Start:s
+	    WHERE s != s.@old_User;
+	
+	converged = (Start.size()==0);
+	// transfer Has_Account connections to the lead user
+  Accounts = SELECT t FROM Start:s -(Has_Account:e) -> Account:t
+		ACCUM
+			VERTEX<User> lead_usr = s.@old_User,
+			INSERT INTO Has_Account VALUES (lead_usr, t),
+			DELETE (e)
+		;
+	
+	// transfer IP to the lead user
+	IPs = SELECT t FROM Start:s -(User_IP:e) -> IP:t
+	  ACCUM
+			VERTEX<User> lead_usr = s.@old_User,
+			INSERT INTO User_IP VALUES (lead_usr, t),
+			DELETE (e)
+		;
+	
+	// transfer Email to the lead user
+	Emails = SELECT t FROM Start:s -(User_Email:e) -> Email:t
+	  ACCUM
+			VERTEX<User> lead_usr = s.@old_User,
+			INSERT INTO User_Email VALUES (lead_usr, t),
+			DELETE (e)
+		;
+	
+	// transfer Phone to the lead user
+	Phones = SELECT t FROM Start:s -(User_Phone:e) -> Phone:t
+	  ACCUM
+			VERTEX<User> lead_usr = s.@old_User,
+			INSERT INTO User_Phone VALUES (lead_usr, t),
+			DELETE (e)
+		;
+
+	// transfer Last_Name to the lead user
+	Last_Names = SELECT t FROM Start:s -(User_LastName:e) -> Last_Name:t
+	  ACCUM
+			VERTEX<User> lead_usr = s.@old_User,
+			INSERT INTO User_LastName VALUES (lead_usr, t),
+			DELETE (e)
+		;
+
+	// transfer Address to the lead user
+	Addresses = SELECT t FROM Start:s -(User_Address:e) -> address:t
+	  ACCUM
+			VERTEX<User> lead_usr = s.@old_User,
+			INSERT INTO User_Address VALUES (lead_usr, t),
+			DELETE (e)
+		;
+	
+	// transfer Devices to the lead user
+	Devices = SELECT t FROM Start:s -(User_Device:e) -> Device:t
+	  ACCUM
+			VERTEX<User> lead_usr = s.@old_User,
+			INSERT INTO User_Device VALUES (lead_usr, t),
+			DELETE (e)
+		;
+	
+	// no longer need the other non-lead nodes
+	Start = SELECT s FROM Start:s
+		POST-ACCUM
+			DELETE (s);
+	
+	// print if any grouping has been performed
+	 PRINT converged;
+
+}

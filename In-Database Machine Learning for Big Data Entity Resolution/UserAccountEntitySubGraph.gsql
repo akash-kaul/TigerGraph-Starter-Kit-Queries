@@ -1,0 +1,23 @@
+CREATE QUERY UserAccountEntitySubGraph(VERTEX<Account> inputAcc) FOR GRAPH Entity_Resolution { 
+	//This query finds the user of a given account and return the other accounts and the attributes of this user. 
+	/**********************************************************
+	 * Example parameters:
+	 *   Acount : 407
+	 **********************************************************/
+	
+	ListAccum<EDGE> @@list;
+	
+	start = {inputAcc};
+	
+	Users = SELECT t FROM start:s-(Has_Account:e)-User:t;
+	
+	Attributes = SELECT attr FROM Users:s-((User_IP|User_Email|User_LastName|User_Phone|User_Address|User_Device):e)-:attr
+	             ACCUM @@list += e;
+	
+	  Other_Accounts = SELECT t FROM Users:s-(Has_Account:e)-Account:t
+	                   ACCUM @@list += e;
+	
+	Attributes = SELECT attr FROM Other_Accounts:s-((Has_IP|Has_Email|Has_Last_Name|Has_Phone|Has_Address|Has_Device):e)-:attr
+	             ACCUM @@list += e;
+	PRINT @@list;
+}

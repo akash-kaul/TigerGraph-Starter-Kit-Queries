@@ -1,0 +1,13 @@
+CREATE QUERY README(/* Parameters here */) FOR GRAPH Entity_Resolution { 
+  /* 
+	This starter kit finds the accounts that are created by the same users, and connect the accounts to their user. The queries need to be run in the sequence below to obtain the correct results
+	1. run user_initialization to initialize a user for each account
+	2. run user_linking to link the users that are considered to be the same. The matching criteria can be set in the query.
+	3.1 run user_grouping to group the connected (by SameAs) users together. check the output to see if more iteration is needed.
+	3.2 if user_grouping return converge: False, repeat step 2 and 3. 
+	4. run UserAccountEntitySubGraph find the user of a given account and the other accounts and the attributes of this user; 
+	   or get_account_interest to find the user of a given account and return the video in which the user is interested.
+	*/ 
+	
+  PRINT "README works!"; 
+}

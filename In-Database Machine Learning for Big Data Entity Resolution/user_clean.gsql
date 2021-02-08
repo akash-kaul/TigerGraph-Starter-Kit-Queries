@@ -1,0 +1,9 @@
+CREATE QUERY user_clean(/* Parameters here */) FOR GRAPH Entity_Resolution { 
+	// delete all users
+  Start = {User.*};
+	Accounts = SELECT t FROM Start:s-(Has_Account:e)->Account:t
+	        POST-ACCUM DELETE(s);
+	Accounts = SELECT s FROM Accounts:s-(Has_Account:e)->User:t
+		        ACCUM DELETE(e);
+
+}

@@ -1,0 +1,35 @@
+CREATE QUERY user_initialization(/* Parameters here */) FOR GRAPH Entity_Resolution { 
+ Accounts = {Account.*};
+	// This query initializes a user vertex for each account and connect the attributes (IP, Email, Device, Phone, Last_Name, address) of the accounts to the user. 
+	// Initialize each account with a user 
+	Accounts = SELECT s FROM Accounts:s
+		WHERE s.outdegree("Has_Account")==0
+		ACCUM 
+			INSERT INTO User VALUES(s.id),
+			INSERT INTO Has_Account VALUES(s.id,s);
+	
+	// connect the User to all the attributes (IP, Email, Device, Phone, Last_Name, address) of his/her account
+	IPs = SELECT attr FROM Accounts:s -(Has_IP:e)->IP:attr
+		ACCUM
+		 INSERT INTO User_IP VALUES(s.id,attr);
+	
+	Emails = SELECT attr FROM Accounts:s -(Has_Email:e)->Email:attr
+		ACCUM
+		 INSERT INTO User_Email VALUES(s.id,attr);
+		
+	Devices = SELECT attr FROM Accounts:s -(Has_Device:e)->Device:attr
+		ACCUM
+		 INSERT INTO User_Device VALUES(s.id,attr);
+	
+	Phones = SELECT attr FROM Accounts:s -(Has_Phone:e)->Phone:attr
+		ACCUM
+		 INSERT INTO User_Phone VALUES(s.id,attr);
+	
+	Last_Names = SELECT attr FROM Accounts:s -(Has_Last_Name:e)->Last_Name:attr
+		ACCUM
+		 INSERT INTO User_LastName VALUES(s.id,attr);
+	
+	Addresses = SELECT attr FROM Accounts:s -(Has_Address:e)->address:attr
+		ACCUM
+		 INSERT INTO User_Address VALUES(s.id,attr);
+}

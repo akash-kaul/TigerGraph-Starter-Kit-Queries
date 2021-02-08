@@ -1,0 +1,46 @@
+CREATE QUERY get_account_interest(vertex<Account> inputAcc, int k=5) FOR GRAPH Entity_Resolution { 
+	//This query finds the user of a given account and return the video in which the user is interested.
+	/**********************************************************
+	 * Example parameters:
+	 *   Acount : 407
+	 *   k : 5
+	 **********************************************************/
+	
+  SetAccum<VERTEX<Account>> @@connected_accounts;
+	MapAccum<VERTEX, int> @map;
+	OrAccum @visited;
+	SumAccum<uint> @cnt;
+	ListAccum<EDGE> @@list;
+	
+	start = {inputAcc};
+	
+	Users = SELECT t FROM start:s-(Has_Account:e)-User:t;
+	
+	Attributes = SELECT attr FROM Users:s-((User_IP|User_Email|User_LastName|User_Phone|User_Address|User_Device):e)-:attr
+	             ACCUM @@list += e;
+	
+	  Other_Accounts = SELECT t FROM Users:s-(Has_Account:e)-Account:t
+	                   ACCUM @@list += e;
+	
+	Attributes = SELECT attr FROM Other_Accounts:s-((Has_IP|Has_Email|Has_Last_Name|Has_Phone|Has_Address|Has_Device):e)-:attr
+	             ACCUM @@list += e;
+	
+	paly_event = SELECT t FROM Other_Accounts:s-(Has_Play_Event:e)-:t ACCUM @@list += e;
+	
+	videos = SELECT t FROM paly_event:s-(Play_Video:e)-:t ACCUM t.@cnt += 1, @@list += e;
+	
+	genreKeyw = SELECT t FROM videos:s-((Has_Genre|Has_Keyword):e)-:t 
+	            ACCUM t.@cnt += s.@cnt, @@list += e;
+	
+	videos = SELECT t from genreKeyw:s-((Has_Genre|Has_Keyword):e)-:t 
+	         WHERE t.@cnt == 0
+	         ACCUM t.@cnt += s.@cnt, t.@map += (s->s.@cnt)
+	         ORDER BY t.@cnt DESC LIMIT k;
+	
+	print videos;
+	
+	videos = SELECT s from videos:s-((Has_Genre|Has_Keyword):e)-:t
+	         ACCUM @@list += e;
+	
+	print @@list;
+}

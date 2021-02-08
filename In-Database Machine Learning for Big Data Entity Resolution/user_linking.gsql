@@ -1,0 +1,44 @@
+CREATE QUERY user_linking(/* Parameters here */) FOR GRAPH Entity_Resolution { 
+	// This query connects the users that are considered to be the same. The linking score between two users is defined as the weight sum of all the shared attributes. Two users are considered to be a match if the linking score is above the threshold. 
+	MapAccum<VERTEX<User>, SumAccum<FLOAT>> @score;
+
+	float IPWeight = 0.5;
+	float EmailWeight = 0.5; 
+	float PhoneWeight = 0.5;
+	float LastNameWeight = 0.25;
+	float AddressWeight = 0.5;
+	float DeviceWeight = 0.5;
+	float threshold = 1.0;
+
+	Users = {User.*} ;
+	
+	// for each attribute connected to users, store the weight to each user in the score map
+	Attributes = SELECT attr
+	  FROM Users:usr-((User_IP|User_Email|User_LastName|User_Phone|User_Address|User_Device):e)-:attr
+	ACCUM
+	   CASE e.type
+			 WHEN "User_IP" THEN attr.@score += (usr->IPWeight)
+			 WHEN "User_Email" THEN attr.@score += (usr->EmailWeight)
+			 WHEN "User_LastName" THEN attr.@score += (usr->LastNameWeight)
+			 WHEN "User_Phone" THEN attr.@score += (usr->PhoneWeight)
+	     WHEN "User_Address" THEN attr.@score += (usr->AddressWeight)
+	     WHEN "User_Device" THEN attr.@score += (usr->DeviceWeight)
+		 END;
+	
+	// for each pair of connected (via attributes) users. aggregate all attribute weights and insert the AameAs links based on threshold
+	Attributes = SELECT attr 
+	  FROM Attributes:attr -((User_IP|User_Email|User_LastName|User_Phone|User_Address|User_Device):e)->User:usr
+		 ACCUM
+			 usr.@score += attr.@score
+		 POST-ACCUM
+			 FOREACH (neighbor_user,score) in usr.@score DO
+				 IF neighbor_user != usr THEN
+						IF score >= threshold THEN
+							 INSERT INTO SameAs VALUES (usr, neighbor_user)
+						END
+				 END
+			 END
+	     ;
+  PRINT "user_linking finishes!"; 
+
+}
