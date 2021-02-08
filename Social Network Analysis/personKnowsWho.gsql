@@ -1,0 +1,25 @@
+CREATE QUERY personKnowsWho(VERTEX <Person> source) FOR GRAPH connectivity { 
+  /* 
+  --- Dataset has been shrunk on Nov.20th,2020 ---
+  
+	Samples:
+  Source:274
+  Source:275
+  Source:276
+
+	DEMO - This query infers all of the people a particular person knows */ 
+  SumAccum<int> @knowsCount;
+	SetAccum <Vertex> @@personSet;
+	
+	@@personSet+= source;
+	startPerson = {source};
+	#startPerson = {Person.*};
+  Events = SELECT event  FROM startPerson:p-(:e)->:event ;
+	
+	Acquaintences = SELECT acquaintence 
+	FROM Events:event-(:e)->Person:acquaintence 
+	WHERE acquaintence!=source
+	ACCUM acquaintence.@knowsCount += 1;
+	
+	PRINT startPerson, Acquaintences;
+	}

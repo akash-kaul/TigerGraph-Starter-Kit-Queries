@@ -1,0 +1,35 @@
+CREATE QUERY personSameAsWho(VERTEX<Person> source, INT topK) FOR GRAPH connectivity {
+/* 
+  --- Dataset has been shrunk on Nov.20th,2020 ---
+
+  Samples:
+  source：55521 ; Topk:5
+  source：127463 ; Topk:10
+  source：174490 ; Topk:15
+This query calculates the Jaccard Similarity between a given vertex and every other vertex.
+Jaccard similarity = intersection_size / (size_A + size_B - intersection_size)
+1. The JSON and FILE version keeps the top k pairs of vertices. The result in FILE version is not in order.
+2. The Attribute version insert edges between the pairs, with the score as an edge attribute.
+   A similarity edge with one FLOAT attribute in the schema is required for this version.
+*/
+    SumAccum<INT> @intersection_size, @@set_size_A, @set_size_B;
+    SumAccum<FLOAT> @similarity;
+    Start (ANY) = {source};
+    Start = SELECT s
+    FROM Start:s
+    ACCUM @@set_size_A += s.outdegree("hasBusRide"), @@set_size_A += s.outdegree("hasTrainRide"), @@set_size_A += s.outdegree("hasBankAccount");
+
+    Subjects = SELECT t
+               FROM Start:s-((hasBusRide|hasTrainRide|hasFlight):e)-:t;
+
+    sameAsSet = SELECT t
+             FROM Subjects:s -((hasBusRide|hasTrainRide|hasFlight):e)- Person:t
+             WHERE t != source
+             ACCUM t.@intersection_size += 1,
+                   t.@set_size_B = t.outdegree("hasBusRide") + t.outdegree("hasTrainRide")+ t.outdegree("hasFlight")
+             POST-ACCUM t.@similarity = t.@intersection_size*1.0/(@@set_size_A + t.@set_size_B - t.@intersection_size)
+             ORDER BY t.@similarity DESC
+             LIMIT topK;
+
+    PRINT Start, sameAsSet;
+}
