@@ -1,0 +1,52 @@
+CREATE QUERY rankProduct(VERTEX <customer> sourceCustomer, STRING weather, STRING timeOfDay, INT topK) FOR GRAPH recommendation { 
+	/***********************************************************
+	 * This query returns the top K highest rated product for a customer 
+	 * while taking into account the weather and TimeOfDay.
+	 *
+	 * Sample Parameters:
+	 * sourceCustomer = "C001" 
+	 * weather = <blank> | "GW" | "BW" 
+	 * timeOfDay = "T1"|"T2"|"T3"|"T4"
+	 * topK = any number > 0
+	 ***********************************************************/
+	
+	
+  SumAccum <FLOAT> @cfAffinity;
+	MaxAccum <FLOAT> @score; 
+	SumAccum <UINT> @filters=0;
+	SumAccum <UINT> @candidateFlag=0;
+	UINT minFilters=0;
+	
+	start = {sourceCustomer};
+	
+	if timeOfDay!="" then minFilters = minFilters + 1; end;
+	if weather!="" then minFilters = minFilters + 1; end;
+	
+	candidateProducts = product.* ; // start with all products
+	
+	if minFilters!=0 THEN
+	  candidateProducts = 
+	    SELECT p from candidateProducts:p -(product_context:pc)-> context:c
+	    WHERE c.id==weather OR c.id==timeOfDay
+	    ACCUM p.@filters += 1
+	    HAVING p.@filters >= minFilters;
+	
+	  candidateProducts = 
+	    SELECT p from candidateProducts:p
+	    POST-ACCUM p.@candidateFlag = 1; // The secret!
+	END;
+	
+	
+  features = 
+	  SELECT f FROM start:s -(customer_feature:cf)-> feature:f
+    ACCUM f.@cfAffinity = cf.affinity; //flow affinity along edge to feature
+	
+	products =
+	  SELECT p FROM features:f -(product_feature:pf)-> product:p
+	  WHERE p.@candidateFlag == 1 OR minFilters==0
+    ACCUM p.@score += pf.weight*f.@cfAffinity
+	  ORDER BY p.@score DESC
+	  LIMIT topK;
+	
+  PRINT products;
+}
