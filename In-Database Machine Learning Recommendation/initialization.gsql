@@ -1,0 +1,27 @@
+CREATE QUERY initialization(float sdv = 0.1, float mean = 0.1) FOR GRAPH Recommender { 
+	// This query initialize the latent factor vectors for the users and the movies
+	// The elements in the latent factor vectors are initialized by a normal distributed random number generator
+	// The query inputs are the standard deviation and the mean of the normal distribution 
+	
+	ListAccum<DOUBLE> @init;
+	//The length of the latent factor vector (i.e. the number of features) is set as 19. This number has to be the same as the num_latent_factors in the training query
+	INT num_latent_factors = 19; 
+	
+  MOVIEs = {MOVIE.*};
+	MOVIEs = SELECT s FROM MOVIEs:s
+	         ACCUM
+	           FOREACH i IN RANGE[1,num_latent_factors] DO
+	             s.@init += sdv*randn()+mean                // assign the random number to the latent factor vectors of the movies
+	           END
+	         POST-ACCUM
+	           s.x = s.@init;
+
+	USERs = {USER.*};
+	USERs = SELECT s FROM USERs:s
+	        ACCUM
+	           FOREACH i IN RANGE[1,num_latent_factors] DO
+	             s.@init += sdv*randn()+mean                // assign the random number to the latent factor vectors of the users
+	           END
+	        POST-ACCUM
+	          s.theta = s.@init;
+}

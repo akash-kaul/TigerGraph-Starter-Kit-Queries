@@ -1,0 +1,90 @@
+CREATE QUERY training(DOUBLE learning_rate = 0.001, DOUBLE regularization_factor = 0.00005, INT Iter=100) FOR GRAPH Recommender {
+	//This query trains the recommender model using gradient descent algorithm 
+	//The number of features is set as 19. This number has to be the same as the num_latent_factors in the initialization query
+	//The query inputs are the learning rate, regularization_factor and the number of training iterations
+	//The query output the root mean square error (RMSE) for each iteration
+	ListAccum<DOUBLE> @tmp;
+	ArrayAccum<SumAccum<double>> @theta[19];     // movie latent factor vector
+	ArrayAccum<SumAccum<double>> @x[19];         // user latent factor vector
+	ArrayAccum<SumAccum<double>> @Gradient[19];  // gradient of the latent factor vector
+	SumAccum<DOUBLE> @@RMSE_training;            // RMSE for the training data
+	SumAccum<DOUBLE> @@RMSE_validation;          // RMSE for the validation data
+	AndAccum @label;
+	
+	//The length of the latent factor vector (i.e. the number of features) is set as 19. This number has to be the same as the num_latent_factors in the initialization query
+  INT num_latent_factors = 19;
+  DOUBLE cnt_training = 69963;  //The size of the training data. This number should be the same as the output of splitData query
+  DOUBLE cnt_validation = 30048;  //The size of the validation data. This number should be the same as the output of splitData query
+
+	// pass x and theta to local accum
+
+	MOVIEs = {MOVIE.*};
+
+	MOVIEs = SELECT s FROM MOVIEs:s
+	         ACCUM
+	           FOREACH i IN RANGE[0,num_latent_factors-1] DO
+	             s.@x[i] += s.x.get(i)
+	           END;
+
+	USERs = {USER.*};
+	USERs = SELECT s FROM USERs:s
+	        ACCUM
+	           FOREACH i IN RANGE[0,num_latent_factors-1] DO
+	             s.@theta[i] += s.theta.get(i)
+	           END;
+
+	// obtain the latent factor vectors using gradient descent algorithm
+	WHILE TRUE LIMIT Iter DO
+	@@RMSE_training = 0;
+	@@RMSE_validation = 0;
+	USERs = SELECT s FROM USERs:s
+	        ACCUM
+	          s.@Gradient.reallocate(num_latent_factors);
+
+  MOVIEs = SELECT s FROM MOVIEs:s
+	        ACCUM
+	          s.@Gradient.reallocate(num_latent_factors);
+
+	USERs = SELECT s FROM USERs:s -(rate:e)-> MOVIE:t
+	        ACCUM
+	          DOUBLE delta = dotProduct_ArrayAccum_ArrayAccum(s.@theta,t.@x),    //The dotProduct_ArrayAccum_ArrayAccum() function return the dot product of two vectors
+	          delta = delta-e.rating,
+	          IF e.label THEN
+	            @@RMSE_training += delta*delta,
+	            s.@Gradient += product_ArrayAccum_const(t.@x,delta),          //The product_ArrayAccum_const() function return the product of a vector and a constant scalar
+	            t.@Gradient += product_ArrayAccum_const(s.@theta,delta)
+	          ELSE
+	            @@RMSE_validation += delta*delta
+	          END
+	        POST-ACCUM
+	          s.@Gradient += product_ArrayAccum_const(s.@theta,regularization_factor),
+	          s.@theta += product_ArrayAccum_const(s.@Gradient,-learning_rate),
+	          t.@Gradient += product_ArrayAccum_const(t.@x,regularization_factor),
+	          t.@x += product_ArrayAccum_const(t.@Gradient,-learning_rate);
+
+  @@RMSE_training = sqrt(@@RMSE_training/cnt_training);
+	@@RMSE_validation = sqrt(@@RMSE_validation/cnt_validation);
+	PRINT @@RMSE_training, @@RMSE_validation;
+
+	END;
+
+
+	// pass local accum to x and theta
+	MOVIEs = SELECT s FROM MOVIEs:s
+	         POST-ACCUM
+	           s.@tmp.clear(),
+	           FOREACH i IN RANGE[0,num_latent_factors-1] DO
+	             s.@tmp += s.@x[i]
+	           END,
+	           s.x = s.@tmp;
+
+
+	USERs = SELECT s FROM USERs:s
+	        POST-ACCUM
+	           s.@tmp.clear(),
+	           FOREACH i IN RANGE[0,num_latent_factors-1] DO
+	             s.@tmp += s.@theta[i]
+	           END,
+	           s.theta = s.@tmp;
+
+}

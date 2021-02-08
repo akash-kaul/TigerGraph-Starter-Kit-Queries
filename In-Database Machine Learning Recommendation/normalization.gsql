@@ -1,0 +1,18 @@
+CREATE QUERY normalization(/* Parameters here */) FOR GRAPH Recommender { 
+	// This query normalizes the ratings by substracting each rating by the average rating of the movie.
+	// The average rating of each movie is computed from the training data
+  AvgAccum @avg_rating;
+  Start = {MOVIE.*};
+	Start = SELECT s FROM Start:s -(rate:e)-> USER:t
+	        ACCUM
+	          IF e.label THEN
+	            s.@avg_rating += e.rating        
+	          END
+	        POST-ACCUM
+	          s.avg_rating = s.@avg_rating;    // the average rating results are stored on the avg_rating attribute of movie vertices
+
+
+	Start = SELECT s FROM Start:s -(rate:e)-> USER:t
+	        ACCUM
+	          e.rating = e.rating - s.@avg_rating;  //substract each rating by the average rating of the movie
+}

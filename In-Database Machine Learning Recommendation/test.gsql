@@ -1,0 +1,15 @@
+CREATE QUERY test(VERTEX<USER> user) FOR GRAPH Recommender { 
+	//This query output the real ratings provided by a user together with the predicted rating by the model 
+	//The query input is a user id
+	//The query output is all the ratings given by the user and the ratings prediction
+  SumAccum<DOUBLE> @predicted_rating;
+	SumAccum<DOUBLE> @real_rating;
+	src = {user};
+	
+	Start = SELECT t FROM src:s -(rate:e)-> MOVIE:t
+	        ACCUM
+	          t.@predicted_rating += dotProduct_List_List(s.theta,t.x)+t.avg_rating,
+	          t.@real_rating += e.rating+t.avg_rating;
+
+	PRINT Start[Start.@real_rating,Start.@predicted_rating];
+}

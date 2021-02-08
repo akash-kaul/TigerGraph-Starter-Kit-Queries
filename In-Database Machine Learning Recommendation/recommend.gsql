@@ -1,0 +1,15 @@
+CREATE QUERY recommend(VERTEX<USER> user) FOR GRAPH Recommender {
+	//This query output the top-10 movies recommended to a user
+	//The movies are recommended based on the rating prediction
+	SumAccum<DOUBLE> @predicted_rating;
+	MaxAccum<DOUBLE> @real_rating;
+	
+  MOVIEs = {MOVIE.*};
+	MOVIEs = SELECT s FROM MOVIEs:s
+	        POST-ACCUM
+	          s.@predicted_rating += dotProduct_List_List(user.theta,s.x)+s.avg_rating    //compute the rating prediction based on the model
+	        ORDER BY s.@predicted_rating DESC
+	        LIMIT 10;
+	PRINT "Recommendation (based on model)";
+	PRINT MOVIEs[MOVIEs.name, MOVIEs.@predicted_rating]; 
+}

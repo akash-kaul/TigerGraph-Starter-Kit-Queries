@@ -1,0 +1,19 @@
+CREATE QUERY README(/* Parameters here */) FOR GRAPH Recommender { 
+  /* 
+The recommendation system can predict the movie ratings based on the latent factor (model-based) method.
+To train the latent factor model, run the queries below in sequence 
+1. splitData
+2. normalization
+3. initialization
+4. training
+
+To test the model and use it for recommendation, run the queries below
+test
+recommend
+
+To re-train model using different training data split, the data need to be reloaded before repeat the steps above.
+The order of the queries need to be followed to ensure the correctness of the result.
+*/ 
+	
+  PRINT "README works!"; 
+}

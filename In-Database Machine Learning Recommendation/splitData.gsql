@@ -1,0 +1,29 @@
+CREATE QUERY splitData() FOR GRAPH Recommender {
+  // This query split rating data into validation set and training set. 
+	// The fraction of testing data is set to be 30%. (i.e. 30% of the rating data will be used for model validation
+	// and the rest 70% will be used for model training).
+	// This query also output the size of total data set, the validation data set and the training data set.
+	SumAccum<INT> @@cnt_total;
+	SumAccum<INT> @@cnt_validation;
+	SumAccum<INT> @@cnt_training;
+	AvgAccum @avg_rating;
+	DOUBLE validationDataFraction = 0.3;  // The fraction of testing data is set to be 30%. 
+	INT remainer;
+	remainer = 100*validationDataFraction;                     // remainer is used for filtering the training data
+	USERs = {USER.*};
+	USERs = SELECT s FROM USERs:s -(rate:e)-> MOVIE:t
+	        ACCUM
+	          @@cnt_total += 1,
+	          IF (getvid(t)+getvid(s)) % 100 < remainer THEN   // select the validation data
+	             e.label = FALSE,                              // set the label of the validation to false (the label of the training data is set as true during loading)
+	             @@cnt_validation += 1
+	          ELSE
+	             e.label = TRUE
+	          END
+	          ;  
+	
+	@@cnt_training = @@cnt_total-@@cnt_validation;
+	PRINT @@cnt_total,@@cnt_validation,@@cnt_training;         // print out the size of total data set, the validation data set and the training data set
+	
+	
+}
